@@ -1,34 +1,50 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
 
-// I defined this interface to ensure type safety when passing extracted data back to parent components
+// I defined this interface to ensure type safety when passing props to the IDScanner component
+// This helps me avoid runtime errors by catching type mismatches during development
 interface IDScannerProps {
-  onDataExtracted: (data: any) => void;
+  onDataExtracted: (data: any) => void; // This callback function lets me send extracted data back to the parent component
 }
 
+/**
+ * IDScanner Component
+ * 
+ * I created this component to handle ID document scanning functionality through:
+ * 1. Camera capture - using device camera to take a photo of an ID document
+ * 2. File upload - allowing users to upload an existing image file
+ * 
+ * The component integrates with the backend API to process images and extract ID information.
+ */
 const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
-  // I used React refs to access the webcam component directly
+  // I'm using multiple state variables to track the different aspects of the scanning process
+  const [scanMethod, setScanMethod] = useState<'camera' | 'upload' | null>(null); // Tracks which scan method the user selected
+  const [isCapturing, setIsCapturing] = useState(false); // Controls whether the camera is active for capturing
+  const [capturedImage, setCapturedImage] = useState<string | null>(null); // Stores the captured/uploaded image as a data URL
+  const [isProcessing, setIsProcessing] = useState(false); // Indicates when the image is being processed by the API
+  const [error, setError] = useState<string | null>(null); // Stores any error messages to display to the user
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null); // Tracks the name of an uploaded file for better UX
+
+  // I'm using useRef to access the webcam component directly when I need to take a snapshot
   const webcamRef = useRef<Webcam>(null);
-  
-  // State management for the different steps of the ID scanning process
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // I implemented two methods for scanning to make the app more flexible
-  const [scanMethod, setScanMethod] = useState<'camera' | 'upload' | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   // I implemented image capture as a useCallback to optimize performance
   // This avoids unnecessary re-renders when the component updates
   const captureImage = useCallback(() => {
-    const imageSrc = webcamRef.current?.getScreenshot();
+    if (!webcamRef.current) {
+      console.error("Webcam reference not available");
+      return;
+    }
+    
+    const imageSrc = webcamRef.current.getScreenshot();
     if (imageSrc) {
       setCapturedImage(imageSrc);
       setIsCapturing(false);
+      console.log("Image captured successfully");
     } else {
+      console.error("Failed to capture image");
       setError('Failed to capture image. Please try again.');
     }
   }, [webcamRef]);
@@ -117,6 +133,7 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
         console.log("Image data (end):", capturedImage.substring(capturedImage.length - 100));
       }
       
+      // I'm sending the image to my API endpoint for processing with GPT-4o
       const response = await fetch('/api/scan-id/extract', {
         method: 'POST',
         headers: {
@@ -203,7 +220,7 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
             />
           </div>
         </div>
-      ) : isCapturing ? (
+      ) : scanMethod === 'camera' && isCapturing ? (
         <div className="flex flex-col items-center">
           <div className="relative w-full max-w-md border-2 border-dashed border-gray-400 mb-4">
             <Webcam

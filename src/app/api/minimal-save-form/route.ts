@@ -1,15 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-// Create a fresh connection
+/**
+ * Minimal Save Form API Route (/api/minimal-save-form)
+ * 
+ * I created this API endpoint to handle form submissions from the ID Scanner application.
+ * It's designed to:
+ * 1. Receive ID information via URL query parameters
+ * 2. Check for duplicate ID numbers in the database
+ * 3. Save valid data to the PostgreSQL database
+ * 4. Return an appropriate HTML response page (success or error)
+ * 
+ * I chose to use URL parameters instead of a request body because it allows
+ * for a simpler implementation with direct browser navigation, without 
+ * requiring a separate fetch API call.
+ */
+
+// I'm creating a new PrismaClient instance to interact with the database
 const prisma = new PrismaClient();
 
-// Simple GET endpoint that creates a user from query parameters
+/**
+ * I implemented a GET handler that processes form submissions via URL parameters
+ * This approach allows for simpler implementation with direct browser navigation
+ */
 export async function GET(request: NextRequest) {
   try {
     console.log('MINIMAL-SAVE-FORM: Starting');
     
-    // Get query parameters
+    // I extract the form data from URL query parameters
     const url = new URL(request.url);
     const name = url.searchParams.get('name') || '';
     const id = url.searchParams.get('id') || '';
@@ -24,7 +42,7 @@ export async function GET(request: NextRequest) {
     console.log('  - expiry:', expiry);
     console.log('  - address:', address);
     
-    // Validate required fields
+    // I validate that all required fields are provided
     if (!name || !id || !dob) {
       return new NextResponse(`
         <!DOCTYPE html>
@@ -50,28 +68,23 @@ export async function GET(request: NextRequest) {
                 font-size: 28px;
                 margin-bottom: 20px;
               }
-              .card {
-                background: rgba(30, 41, 59, 0.7);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
+              .error-container {
+                background: rgba(239, 68, 68, 0.1);
+                border: 1px solid rgba(239, 68, 68, 0.3);
                 padding: 24px;
-                backdrop-filter: blur(10px);
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                margin-bottom: 24px;
-              }
-              .error {
-                background: rgba(220, 38, 38, 0.2);
-                border: 1px solid rgba(220, 38, 38, 0.3);
-                padding: 16px;
-                border-radius: 6px;
+                border-radius: 8px;
                 margin-bottom: 20px;
+              }
+              .missing-fields {
+                margin-top: 20px;
+                padding-left: 20px;
               }
               a {
                 display: inline-block;
                 background: #3b82f6;
                 color: white;
                 padding: 10px 20px;
-                border-radius: 4px;
+                border-radius: 6px;
                 text-decoration: none;
                 font-weight: 500;
                 margin-top: 20px;
@@ -84,18 +97,15 @@ export async function GET(request: NextRequest) {
           <body>
             <div class="container">
               <h1>Error: Missing Required Fields</h1>
-              <div class="card">
-                <div class="error">
-                  <p>Please fill in all required fields:</p>
-                  <ul>
-                    ${!name ? '<li>Full Name is required</li>' : ''}
-                    ${!id ? '<li>ID Number is required</li>' : ''}
-                    ${!dob ? '<li>Date of Birth is required</li>' : ''}
-                  </ul>
-                </div>
-                <p>Please go back and complete all required fields before submitting.</p>
-                <a href="/scan">Back to Scan Page</a>
+              <div class="error-container">
+                <p>Please fill in all required fields:</p>
+                <ul class="missing-fields">
+                  ${!name ? '<li>Full Name</li>' : ''}
+                  ${!id ? '<li>ID Number</li>' : ''}
+                  ${!dob ? '<li>Date of Birth</li>' : ''}
+                </ul>
               </div>
+              <a href="/scan">Back to Scan Page</a>
             </div>
           </body>
         </html>
@@ -107,21 +117,21 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Check if ID already exists in database
+    // I check if a user with this ID number already exists in the database
+    // This prevents duplicate entries and provides appropriate feedback
     const existingUser = await prisma.user.findFirst({
-      where: {
-        idNumber: id
-      }
+      where: { idNumber: id }
     });
     
+    // If a duplicate ID is found, I return an error page with details about the existing record
     if (existingUser) {
-      console.log('MINIMAL-SAVE-FORM: Duplicate ID found:', id);
+      console.log('MINIMAL-SAVE-FORM: Duplicate ID found:', existingUser.idNumber);
       
       return new NextResponse(`
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Duplicate ID Error</title>
+            <title>Duplicate ID Number</title>
             <style>
               body { 
                 font-family: Arial, sans-serif; 
@@ -141,26 +151,17 @@ export async function GET(request: NextRequest) {
                 font-size: 28px;
                 margin-bottom: 20px;
               }
-              .card {
-                background: rgba(30, 41, 59, 0.7);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
+              .duplicate-container {
+                background: rgba(239, 68, 68, 0.1);
+                border: 1px solid rgba(239, 68, 68, 0.3);
                 padding: 24px;
-                backdrop-filter: blur(10px);
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                margin-bottom: 24px;
-              }
-              .error {
-                background: rgba(220, 38, 38, 0.2);
-                border: 1px solid rgba(220, 38, 38, 0.3);
-                padding: 16px;
-                border-radius: 6px;
+                border-radius: 8px;
                 margin-bottom: 20px;
               }
               .data-item {
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 8px 0;
                 display: flex;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 12px 0;
               }
               .data-label {
                 font-weight: bold;
@@ -172,7 +173,7 @@ export async function GET(request: NextRequest) {
                 background: #3b82f6;
                 color: white;
                 padding: 10px 20px;
-                border-radius: 4px;
+                border-radius: 6px;
                 text-decoration: none;
                 font-weight: 500;
                 margin-top: 20px;
@@ -184,16 +185,12 @@ export async function GET(request: NextRequest) {
           </head>
           <body>
             <div class="container">
-              <h1>Duplicate ID Error</h1>
-              <div class="card">
-                <div class="error">
-                  <p>The ID number <strong>${id}</strong> already exists in the database.</p>
-                  <p>Please go back and use a different ID number.</p>
-                </div>
+              <h1>Duplicate ID Number Detected</h1>
+              <div class="duplicate-container">
+                <p>A record with this ID number already exists in the database:</p>
                 
-                <h3>Existing Record Details:</h3>
                 <div class="data-item">
-                  <div class="data-label">Name:</div>
+                  <div class="data-label">Full Name:</div>
                   <div>${existingUser.fullName}</div>
                 </div>
                 <div class="data-item">
@@ -222,7 +219,7 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Prepare data for database
+    // I prepare the user data object for database insertion
     const userData = {
       fullName: name,
       idNumber: id,
@@ -234,20 +231,20 @@ export async function GET(request: NextRequest) {
     
     console.log('MINIMAL-SAVE-FORM: Data to save:', userData);
     
-    // Direct save to database
+    // I save the new user record to the database using Prisma
     const result = await prisma.user.create({
       data: userData
     });
     
     console.log('MINIMAL-SAVE-FORM: Save successful, ID:', result.id);
     
-    // Get latest records
+    // I fetch the 5 most recent records to display on the success page
     const records = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       take: 5
     });
     
-    // Return HTML with styling matching the main application
+    // I return a styled HTML success page with the saved information
     return new NextResponse(`
       <!DOCTYPE html>
       <html>
@@ -352,32 +349,27 @@ export async function GET(request: NextRequest) {
               gap: 12px;
               margin-top: 24px;
             }
-            .btn-primary {
+            .button {
+              display: inline-block;
+              padding: 10px 20px;
+              border-radius: 6px;
+              text-decoration: none;
+              font-weight: 500;
+              text-align: center;
+            }
+            .button-primary {
               background: #3b82f6;
               color: white;
-              padding: 12px 24px;
-              border-radius: 4px;
-              text-decoration: none;
-              font-weight: 500;
-              flex: 1;
-              text-align: center;
             }
-            .btn-primary:hover {
+            .button-primary:hover {
               background: #2563eb;
             }
-            .btn-outline {
-              background: transparent;
-              color: #e2e8f0;
-              border: 1px solid rgba(255, 255, 255, 0.3);
-              padding: 12px 24px;
-              border-radius: 4px;
-              text-decoration: none;
-              font-weight: 500;
-              flex: 1;
-              text-align: center;
-            }
-            .btn-outline:hover {
+            .button-secondary {
               background: rgba(255, 255, 255, 0.1);
+              color: #e2e8f0;
+            }
+            .button-secondary:hover {
+              background: rgba(255, 255, 255, 0.2);
             }
           </style>
         </head>
@@ -389,65 +381,69 @@ export async function GET(request: NextRequest) {
               <div class="success-banner">
                 <div class="success-icon">✓</div>
                 <div>
-                  <h3 style="margin:0 0 4px 0;">Success!</h3>
-                  <p style="margin:0;">Your ID information has been saved to the database.</p>
+                  <strong>Success!</strong> The ID information has been saved to the database.
                 </div>
               </div>
               
               <h2>Saved Information</h2>
+              
               <div class="data-item">
                 <div class="data-label">Full Name:</div>
                 <div>${result.fullName}</div>
               </div>
+              
               <div class="data-item">
                 <div class="data-label">ID Number:</div>
                 <div>${result.idNumber}</div>
               </div>
+              
               <div class="data-item">
                 <div class="data-label">Date of Birth:</div>
                 <div>${result.dateOfBirth}</div>
               </div>
+              
+              ${result.expiryDate ? `
               <div class="data-item">
                 <div class="data-label">Expiry Date:</div>
-                <div>${result.expiryDate || 'N/A'}</div>
+                <div>${result.expiryDate}</div>
               </div>
+              ` : ''}
+              
+              ${result.address ? `
               <div class="data-item">
                 <div class="data-label">Address:</div>
-                <div>${result.address || 'N/A'}</div>
+                <div>${result.address}</div>
               </div>
+              ` : ''}
+              
               <div class="data-item">
-                <div class="data-label">Database ID:</div>
+                <div class="data-label">Record ID:</div>
                 <div>${result.id}</div>
-              </div>
-              <div class="data-item">
-                <div class="data-label">Date Created:</div>
-                <div>${new Date(result.createdAt).toLocaleString()}</div>
               </div>
               
               <div class="buttons">
-                <a href="/scan" class="btn-primary">Scan Another ID</a>
-                <a href="/dashboard" class="btn-outline">View All Records</a>
+                <a href="/scan" class="button button-primary">Scan Another ID</a>
+                <a href="/dashboard" class="button button-secondary">View All Records</a>
               </div>
             </div>
             
             <h2>Recent Records</h2>
-            <div class="card">
-              <div class="recent-records">
-                ${records.map(record => `
-                  <div class="record">
-                    <div class="record-header">
-                      <div class="record-name">${record.fullName}</div>
-                      <div class="record-date">${new Date(record.createdAt).toLocaleString()}</div>
-                    </div>
-                    <div class="record-id">ID Number: ${record.idNumber}</div>
+            <div class="recent-records">
+              ${records.map(record => `
+                <div class="record">
+                  <div class="record-header">
+                    <div class="record-name">${record.fullName}</div>
+                    <div class="record-date">${new Date(record.createdAt).toLocaleString()}</div>
                   </div>
-                `).join('')}
-              </div>
+                  <div class="record-id">ID: ${record.idNumber}</div>
+                </div>
+              `).join('')}
             </div>
           </div>
         </body>
       </html>
     `, {
+      status: 200,
       headers: {
         'Content-Type': 'text/html'
       }
@@ -456,7 +452,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('MINIMAL-SAVE-FORM ERROR:', error);
     
-    // Return HTML error page
+    // I return an error page if something goes wrong
     return new NextResponse(`
       <!DOCTYPE html>
       <html>
@@ -481,39 +477,28 @@ export async function GET(request: NextRequest) {
               font-size: 28px;
               margin-bottom: 20px;
             }
-            .card {
-              background: rgba(30, 41, 59, 0.7);
-              border: 1px solid rgba(255, 255, 255, 0.1);
-              border-radius: 8px;
+            .error-container {
+              background: rgba(239, 68, 68, 0.1);
+              border: 1px solid rgba(239, 68, 68, 0.3);
               padding: 24px;
-              backdrop-filter: blur(10px);
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-              margin-bottom: 24px;
-            }
-            .error {
-              background: rgba(220, 38, 38, 0.2);
-              border: 1px solid rgba(220, 38, 38, 0.3);
-              padding: 16px;
-              border-radius: 6px;
+              border-radius: 8px;
               margin-bottom: 20px;
             }
-            .error-details {
+            .error-message {
+              margin-top: 16px;
+              padding: 12px;
               background: rgba(0, 0, 0, 0.2);
               border-radius: 4px;
-              padding: 12px;
               font-family: monospace;
               white-space: pre-wrap;
-              margin-top: 16px;
-              font-size: 14px;
-              max-height: 200px;
-              overflow-y: auto;
+              word-break: break-all;
             }
             a {
               display: inline-block;
               background: #3b82f6;
               color: white;
               padding: 10px 20px;
-              border-radius: 4px;
+              border-radius: 6px;
               text-decoration: none;
               font-weight: 500;
               margin-top: 20px;
@@ -526,15 +511,11 @@ export async function GET(request: NextRequest) {
         <body>
           <div class="container">
             <h1>Error Saving ID Information</h1>
-            <div class="card">
-              <div class="error">
-                <p>An error occurred while saving the ID information:</p>
-                <p><strong>${error.message || 'Unknown error'}</strong></p>
-                <div class="error-details">${JSON.stringify(error, null, 2)}</div>
-              </div>
-              <p>Please try again or contact support if the issue persists.</p>
-              <a href="/scan">Back to Scan Page</a>
+            <div class="error-container">
+              <p>There was an error saving the ID information to the database.</p>
+              <div class="error-message">${error.message || 'Unknown error'}</div>
             </div>
+            <a href="/scan">Back to Scan Page</a>
           </div>
         </body>
       </html>
@@ -545,6 +526,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } finally {
+    // I make sure to disconnect from the database to prevent connection leaks
     await prisma.$disconnect();
   }
 } 
