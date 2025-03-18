@@ -1,48 +1,38 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { users } from '../scan-id/route';
 
-// Create the Prisma client
+// Create a fresh connection
 const prisma = new PrismaClient();
 
-// Define a user type for in-memory storage
-interface User {
-  id: number;
-  fullName: string;
-  idNumber: string;
-  dateOfBirth: string;
-  expiryDate?: string;
-  address?: string;
-  photoUrl?: string | null;
-  createdAt: string;
-}
-
-// Import users from scan-id route
-// const users: User[] = [];
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Try to query the database first
-    try {
-      const dbUsers = await prisma.user.findMany({
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
-      
-      console.log(`Retrieved ${dbUsers.length} users from database`);
-      return NextResponse.json(dbUsers);
-    } catch (dbError) {
-      console.error('Error fetching from database, falling back to in-memory storage:', dbError);
-      
-      // Fall back to in-memory users if database query fails
-      return NextResponse.json(users);
-    }
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch users' }, 
-      { status: 500 }
-    );
+    console.log('USERS API: Fetching all users');
+    
+    // Get all users, ordered by most recent first
+    const users = await prisma.user.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    console.log(`USERS API: Found ${users.length} users`);
+    
+    return NextResponse.json({ 
+      users,
+      count: users.length
+    });
+    
+  } catch (error: any) {
+    console.error('USERS API ERROR:', error);
+    
+    return NextResponse.json({
+      error: error.message || 'Failed to fetch users',
+      users: []
+    }, { 
+      status: 500 
+    });
+    
+  } finally {
+    await prisma.$disconnect();
   }
 } 

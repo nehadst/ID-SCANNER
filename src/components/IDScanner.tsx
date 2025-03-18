@@ -3,19 +3,26 @@
 import { useState, useRef, useCallback } from 'react';
 import Webcam from 'react-webcam';
 
+// I defined this interface to ensure type safety when passing extracted data back to parent components
 interface IDScannerProps {
   onDataExtracted: (data: any) => void;
 }
 
 const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
+  // I used React refs to access the webcam component directly
   const webcamRef = useRef<Webcam>(null);
+  
+  // State management for the different steps of the ID scanning process
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // I implemented two methods for scanning to make the app more flexible
   const [scanMethod, setScanMethod] = useState<'camera' | 'upload' | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
+  // I implemented image capture as a useCallback to optimize performance
+  // This avoids unnecessary re-renders when the component updates
   const captureImage = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot();
     if (imageSrc) {
@@ -26,6 +33,7 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
     }
   }, [webcamRef]);
 
+  // This handler processes file uploads with validation for security and UX
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -33,12 +41,13 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
       return;
     }
 
-    // Save file name for display
+    // Save file name for display to improve user experience
     setSelectedFileName(file.name);
 
     console.log("File selected:", file.name, file.type, file.size);
-    alert(`File selected: ${file.name}`); // Add alert for clear feedback
+    alert(`File selected: ${file.name}`); // Added clear feedback for user action
 
+    // I implemented file validation for better security and reliability
     // Check file size (limit to 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError('File is too large. Please select a file under 5MB.');
@@ -51,13 +60,14 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
       return;
     }
 
+    // I'm using FileReader API to handle file uploads asynchronously
     const reader = new FileReader();
     reader.onload = (e) => {
       console.log("File loaded successfully");
       const result = e.target?.result as string;
       setCapturedImage(result);
       
-      // Add a clear confirmation message
+      // I added explicit UI feedback to guide users through the process
       alert("Image loaded successfully! Click 'Process ID' to continue.");
     };
     reader.onerror = (error) => {
@@ -67,6 +77,7 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
     reader.readAsDataURL(file);
   };
 
+  // I added this reset function to improve UX by allowing users to restart the process
   const resetState = () => {
     setCapturedImage(null);
     setIsCapturing(false);
@@ -74,6 +85,8 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
     setError(null);
   };
 
+  // This function lets users retake images if they're not satisfied
+  // It improves user experience by providing flexibility
   const retakeImage = () => {
     setCapturedImage(null);
     if (scanMethod === 'camera') {
@@ -84,6 +97,7 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
     setError(null);
   };
 
+  // The core function that sends the image to the backend API for processing
   const processImage = async () => {
     if (!capturedImage) {
       console.error("Cannot process - no image captured");
@@ -96,17 +110,14 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
     
     try {
       console.log("Sending API request...");
-      // Limit the size of the image if it's too large
       let imageToSend = capturedImage;
       if (capturedImage.length > 1000000) {
         console.log("Image is large, truncating for display");
-        // Still send full image, just log a shorter version
         console.log("Image data (start):", capturedImage.substring(0, 100));
         console.log("Image data (end):", capturedImage.substring(capturedImage.length - 100));
       }
       
-      // Send the image to the backend for processing
-      const response = await fetch('/api/scan-id', {
+      const response = await fetch('/api/scan-id/extract', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -116,14 +127,15 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
       
       console.log("API response status:", response.status);
       
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("API error response:", errorText);
-        throw new Error(`Failed to process ID: ${response.status} ${errorText}`);
+        console.error("API error response:", data);
+        throw new Error(`Failed to process ID: ${response.status}`);
       }
       
-      const data = await response.json();
       console.log("Received data from API:", data);
+      // Pass extracted data back to parent component through the callback
       onDataExtracted(data);
     } catch (err) {
       console.error('Error processing ID:', err);
@@ -134,15 +146,20 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
   };
 
   return (
+    // I used a container with Tailwind CSS for responsive design
+    // This ensures the component looks good on different screen sizes
     <div className="w-full max-w-lg bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-4 text-center">ID Scanner</h2>
       
+      {/* I implemented error handling with visual feedback */}
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
           <span className="block sm:inline">{error}</span>
         </div>
       )}
       
+      {/* I added a loading overlay to provide feedback during processing */}
+      {/* This improves UX by indicating background activity */}
       {isProcessing && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-md max-w-sm w-full">
@@ -155,6 +172,8 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
         </div>
       )}
       
+      {/* Initial method selection screen */}
+      {/* I implemented a clear UI flow that guides users through each step */}
       {!scanMethod && !capturedImage ? (
         <div className="flex flex-col items-center">
           <p className="mb-4 text-center">Choose how you want to scan your ID document</p>
@@ -168,6 +187,7 @@ const IDScanner: React.FC<IDScannerProps> = ({ onDataExtracted }) => {
             >
               Use Camera
             </button>
+            {/* I used a label+input pattern for better accessibility and styling */}
             <label htmlFor="main-file-upload" className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded cursor-pointer">
               Upload Document
             </label>

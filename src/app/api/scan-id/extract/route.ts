@@ -1,27 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
 
-// Create a Prisma client
-const prisma = new PrismaClient();
-
-// Define a user type for in-memory storage
-interface User {
-  id: number;
-  fullName: string;
-  idNumber: string;
-  dateOfBirth: string;
-  expiryDate?: string;
-  address?: string;
-  photoUrl?: string | null;
-  createdAt: string;
-}
-
-// In-memory storage for fallback
-// We keep this as a fallback in case of database failure
-export const users: User[] = [];
-
-// Initialize OpenAI client
+// Configure the OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -31,13 +11,10 @@ const openai = new OpenAI({
  */
 async function extractDataFromId(base64Image: string) {
   try {
-    // Use OpenAI GPT-4o to extract information from the ID document
     console.log("Processing ID image with OpenAI");
     
     try {
-      // Send the image to GPT-4o for analysis
-      // Ensure the base64 image has the proper format for OpenAI
-      // OpenAI requires a proper data URL with MIME type
+      // Format the base64 image for the OpenAI API
       let formattedImage = base64Image;
       
       // If it doesn't already have a data URL prefix, add it
@@ -47,6 +24,7 @@ async function extractDataFromId(base64Image: string) {
       
       console.log("Sending image to OpenAI...");
       
+      // Call OpenAI API for text extraction
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -76,13 +54,11 @@ async function extractDataFromId(base64Image: string) {
       
       console.log("OpenAI response received");
       
-      // Parse the response content
       if (response.choices && response.choices[0] && response.choices[0].message.content) {
         try {
           const extractedData = JSON.parse(response.choices[0].message.content);
-          console.log("Extracted data from GPT-4o:", extractedData);
+          console.log("Extracted data from GPT-4o:", JSON.stringify(extractedData, null, 2));
           
-          // Ensure all required fields exist
           return {
             fullName: extractedData.fullName || null,
             idNumber: extractedData.idNumber || null,
@@ -100,7 +76,7 @@ async function extractDataFromId(base64Image: string) {
       }
     } catch (openaiError) {
       console.error("OpenAI API error:", openaiError);
-      // Fall back to simulated data if OpenAI API fails
+      // Fall back to simulated data
       console.log("Falling back to simulated data");
       return generateSimulatedData();
     }
@@ -110,26 +86,25 @@ async function extractDataFromId(base64Image: string) {
   }
 }
 
-// Generate simulated data for fallback
+/**
+ * Generates simulated ID data for fallback
+ */
 function generateSimulatedData() {
   const names = ['John Smith', 'Jane Doe', 'Alice Johnson', 'Robert Brown', 'Emily Davis'];
   const randomName = names[Math.floor(Math.random() * names.length)];
   
   const idNumber = `ID${Math.floor(10000000 + Math.random() * 90000000)}`;
   
-  // Generate a random date of birth (between 1960 and 2000)
   const year = Math.floor(1960 + Math.random() * 40);
   const month = Math.floor(1 + Math.random() * 12).toString().padStart(2, '0');
   const day = Math.floor(1 + Math.random() * 28).toString().padStart(2, '0');
   const dob = `${year}-${month}-${day}`;
   
-  // Generate expiry date (5-10 years in the future)
   const expiryYear = new Date().getFullYear() + Math.floor(5 + Math.random() * 5);
   const expiryMonth = Math.floor(1 + Math.random() * 12).toString().padStart(2, '0');
   const expiryDay = Math.floor(1 + Math.random() * 28).toString().padStart(2, '0');
   const expiryDate = `${expiryYear}-${expiryMonth}-${expiryDay}`;
   
-  // Generate a random address
   const streets = ['123 Main St', '456 Oak Ave', '789 Pine Rd', '321 Elm Blvd', '654 Maple Dr'];
   const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix'];
   const states = ['NY', 'CA', 'IL', 'TX', 'AZ'];
@@ -150,86 +125,38 @@ function generateSimulatedData() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { image } = await request.json();
+    // Parse the request body
+    let requestData;
+    try {
+      requestData = await request.json();
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid request format' }, 
+        { status: 400 }
+      );
+    }
     
-    if (!image) {
-      console.error('No image data provided');
+    if (!requestData.image) {
       return NextResponse.json(
         { error: 'Image data is required' }, 
         { status: 400 }
       );
     }
     
-    console.log('Processing ID image, length:', image.length);
+    const image = requestData.image;
+    console.log('Processing ID image for extraction, length:', image.length);
     
     // Extract data from ID image using GPT-4o
     const extractedData = await extractDataFromId(image);
-    console.log('Extracted data:', JSON.stringify(extractedData, null, 2));
+    console.log('Final extracted data:', JSON.stringify(extractedData, null, 2));
     
-    // Store data in both memory and database for reliability
-    let savedUser = null;
-    
-    try {
-      // First try to save to the database
-      savedUser = await prisma.user.create({
-        data: {
-          fullName: extractedData.fullName || 'Unknown',
-          idNumber: extractedData.idNumber || `ID${Math.floor(10000000 + Math.random() * 90000000)}`,
-          dateOfBirth: extractedData.dateOfBirth || '1900-01-01',
-          expiryDate: extractedData.expiryDate || null,
-          address: extractedData.address || null,
-          photoUrl: null // In a real app, you might save the image to Cloud Storage and store the URL
-        }
-      });
-      console.log('User saved to database with ID:', savedUser.id);
-    } catch (dbError: any) {
-      console.error('Database error:', dbError);
-      
-      // If the error is due to duplicate ID number, generate a new one
-      if (dbError.code === 'P2002') {
-        try {
-          // Try again with a random ID number
-          const newIdNumber = `ID${Math.floor(10000000 + Math.random() * 90000000)}`;
-          console.log('Generated new ID number due to conflict:', newIdNumber);
-          
-          savedUser = await prisma.user.create({
-            data: {
-              fullName: extractedData.fullName || 'Unknown',
-              idNumber: newIdNumber,
-              dateOfBirth: extractedData.dateOfBirth || '1900-01-01',
-              expiryDate: extractedData.expiryDate || null,
-              address: extractedData.address || null,
-              photoUrl: null
-            }
-          });
-          console.log('User saved to database with new ID number, ID:', savedUser.id);
-        } catch (retryError) {
-          console.error('Failed to save with new ID number:', retryError);
-          // Fall back to in-memory storage
-          savedUser = null;
-        }
-      }
-      
-      // If database save failed, fall back to in-memory storage
-      if (!savedUser) {
-        // Add timestamp
-        const user = {
-          ...extractedData,
-          id: users.length + 1,
-          createdAt: new Date().toISOString()
-        };
-        
-        users.push(user);
-        console.log('User saved to in-memory storage, ID:', user.id);
-        savedUser = user;
-      }
-    }
-    
-    return NextResponse.json(savedUser || extractedData);
+    // Just return the extracted data without saving to database
+    return NextResponse.json(extractedData);
   } catch (error) {
-    console.error('Error processing ID:', error);
+    console.error('Error extracting from ID:', error);
     return NextResponse.json(
-      { error: 'Failed to process ID. Please try again.' }, 
+      { error: 'Failed to extract data from ID. Please try again.' }, 
       { status: 500 }
     );
   }
