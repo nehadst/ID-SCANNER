@@ -6,27 +6,24 @@ actor "User" as User
 actor "GPT-4o API" as GPT4o
 
 rectangle "ID Scanner Application" {
-  usecase "Navigate between pages" as UC1
   usecase "Scan ID using camera" as UC2
+  usecase "Scan ID using file upload" as UC1
   usecase "Enter ID information manually" as UC3
   usecase "Save ID information" as UC4
   usecase "View all ID records" as UC5
-  usecase "View record details" as UC6
   usecase "Handle duplicate IDs" as UC7
   usecase "Validate input data" as UC8
   usecase "Extract data from ID image" as UC9
   usecase "Process image with AI" as UC10
 }
-
 User --> UC1
 User --> UC2
 User --> UC3
 User --> UC4
 User --> UC5
-User --> UC6
 
-GPT4o --> UC10
-
+UC10 --> GPT4o
+UC1 ..> UC9 : includes
 UC2 ..> UC9 : includes
 UC9 ..> UC10 : includes
 UC10 ..> UC3 : extends

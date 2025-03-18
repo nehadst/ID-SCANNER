@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 
 // PrismaClient is attached to the `global` object in development to prevent
-// exhausting your database connection limit.
+// exhausting the database connection limit.
 // Learn more: https://pris.ly/d/help/next-js-best-practices
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient }
@@ -65,9 +65,9 @@ if (process.env.NODE_ENV !== 'production') {
   testDatabaseConnection()
     .then(result => {
       if (!result) {
-        console.error('⚠️ DATABASE CONNECTION TEST FAILED! Check your connection settings.');
+        console.error('DATABASE CONNECTION TEST FAILED! Check your connection settings.');
       } else {
-        console.log('✅ Database connection verified successfully.');
+        console.log('Database connection verified successfully.');
       }
     })
     .catch(err => {
